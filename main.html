@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Signal — Webpage Risk Scanner</title>
+<style>
+  :root{
+    --bg:#0A0E13;
+    --panel:#10161D;
+    --panel-2:#161D26;
+    --line:#232C36;
+    --text:#DCE4EB;
+    --muted:#6B7787;
+    --mono-dim:#4A5563;
+    --safe:#35D48A;
+    --safe-dim:#173327;
+    --warn:#F0B03D;
+    --warn-dim:#332911;
+    --danger:#F0475C;
+    --danger-dim:#331419;
+    --accent:#4FC3F7;
+    --font-display:'Space Grotesk', 'Segoe UI', sans-serif;
+    --font-body:'Inter', 'Segoe UI', sans-serif;
+    --font-mono:'JetBrains Mono', 'Courier New', monospace;
+  }
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:
+      radial-gradient(ellipse 900px 500px at 15% -10%, rgba(79,195,247,0.06), transparent 60%),
+      radial-gradient(ellipse 700px 400px at 100% 10%, rgba(53,212,138,0.05), transparent 60%),
+      var(--bg);
+    color:var(--text);
+    font-family:var(--font-body);
+    min-height:100vh;
+    padding:32px 20px 60px;
+  }
+
+  .wrap{max-width:880px;margin:0 auto;}
+
+  /* header */
+  .hdr{display:flex;align-items:center;gap:12px;margin-bottom:6px;}
+  .dot{width:9px;height:9px;border-radius:50%;background:var(--safe);box-shadow:0 0 10px var(--safe);animation:pulse 2.4s ease-in-out infinite;}
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.35;}}
+  .brand{font-family:var(--font-display);font-weight:700;font-size:20px;letter-spacing:0.02em;}
+  .brand span{color:var(--accent);}
+  .tagline{color:var(--muted);font-size:13.5px;margin:2px 0 30px 21px;letter-spacing:0.01em;}
+
+  /* scan bar */
+  .scanbar{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:12px;
+    padding:6px;
+    display:flex;
+    gap:6px;
+    box-shadow:0 20px 40px -20px rgba(0,0,0,0.6);
+  }
+  .scanbar input{
+    flex:1;
+    background:transparent;
+    border:none;
+    outline:none;
+    color:var(--text);
+    font-family:var(--font-mono);
+    font-size:14.5px;
+    padding:14px 16px;
+  }
+  .scanbar input::placeholder{color:var(--mono-dim);}
+  .scanbar button{
+    background:var(--accent);
+    color:#04141C;
+    border:none;
+    border-radius:8px;
+    padding:0 22px;
+    font-family:var(--font-display);
+    font-weight:600;
+    font-size:14px;
+    cursor:pointer;
+    transition:transform .15s ease, background .15s ease;
+  }
+  .scanbar button:hover{background:#6ED0F9;transform:translateY(-1px);}
+  .scanbar button:active{transform:translateY(0);}
+
+  .toggle-row{display:flex;justify-content:space-between;align-items:center;margin:12px 2px 0;}
+  .toggle-link{color:var(--muted);font-size:12.5px;cursor:pointer;text-decoration:underline;text-underline-offset:3px;}
+  .toggle-link:hover{color:var(--accent);}
+  .hint{color:var(--mono-dim);font-size:12px;font-family:var(--font-mono);}
+
+  .content-area{display:none;margin-top:10px;}
+  .content-area.show{display:block;}
+  .content-area textarea{
+    width:100%;
+    min-height:110px;
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:10px;
+    color:var(--text);
+    font-family:var(--font-mono);
+    font-size:13px;
+    padding:14px;
+    resize:vertical;
+    outline:none;
+  }
+  .content-area textarea::placeholder{color:var(--mono-dim);}
+  .content-area label{display:block;color:var(--muted);font-size:12px;margin:14px 0 6px;font-family:var(--font-mono);}
+
+  /* result */
+  #result{display:none;margin-top:34px;}
+  #result.show{display:block;animation:rise .4s ease both;}
+  @keyframes rise{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:translateY(0);}}
+
+  .verdict-card{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:16px;
+    padding:28px;
+    display:flex;
+    gap:28px;
+    align-items:center;
+    position:relative;
+    overflow:hidden;
+  }
+  .verdict-card::before{
+    content:'';position:absolute;inset:0;
+    background:linear-gradient(120deg, var(--verdict-glow, transparent), transparent 55%);
+    opacity:.5;pointer-events:none;
+  }
+
+  .gauge{position:relative;width:132px;height:132px;flex-shrink:0;}
+  .gauge svg{transform:rotate(-90deg);}
+  .gauge-num{
+    position:absolute;inset:0;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+  }
+  .gauge-num .score{font-family:var(--font-display);font-weight:700;font-size:34px;line-height:1;}
+  .gauge-num .of100{font-family:var(--font-mono);color:var(--muted);font-size:10.5px;margin-top:2px;letter-spacing:.05em;}
+
+  .verdict-text{flex:1;min-width:0;}
+  .verdict-label{
+    display:inline-block;
+    font-family:var(--font-mono);
+    font-size:11px;
+    letter-spacing:.08em;
+    padding:4px 10px;
+    border-radius:6px;
+    margin-bottom:10px;
+  }
+  .verdict-title{font-family:var(--font-display);font-weight:700;font-size:22px;margin:0 0 6px;}
+  .verdict-sub{color:var(--muted);font-size:13.5px;line-height:1.5;margin:0;}
+  .verdict-url{
+    font-family:var(--font-mono);
+    font-size:12px;color:var(--mono-dim);
+    margin-top:12px;word-break:break-all;
+  }
+
+  /* signals */
+  .signals{margin-top:22px;}
+  .signals-hdr{
+    font-family:var(--font-mono);font-size:11px;color:var(--muted);
+    letter-spacing:.1em;margin:0 0 10px 4px;
+  }
+  .signal-row{
+    display:flex;align-items:flex-start;gap:12px;
+    padding:13px 16px;
+    background:var(--panel-2);
+    border:1px solid var(--line);
+    border-radius:10px;
+    margin-bottom:7px;
+  }
+  .signal-icon{
+    width:20px;height:20px;border-radius:50%;
+    display:flex;align-items:center;justify-content:center;
+    flex-shrink:0;margin-top:1px;
+    font-size:12px;font-weight:700;font-family:var(--font-mono);
+  }
+  .signal-icon.pass{background:var(--safe-dim);color:var(--safe);}
+  .signal-icon.warn{background:var(--warn-dim);color:var(--warn);}
+  .signal-icon.fail{background:var(--danger-dim);color:var(--danger);}
+  .signal-body .signal-name{font-size:13.5px;font-weight:600;color:var(--text);}
+  .signal-body .signal-desc{font-size:12.5px;color:var(--muted);margin-top:2px;line-height:1.4;}
+
+  .disclaimer{
+    margin-top:24px;
+    padding:14px 16px;
+    border:1px dashed var(--line);
+    border-radius:10px;
+    color:var(--mono-dim);
+    font-size:11.5px;
+    font-family:var(--font-mono);
+    line-height:1.6;
+  }
+
+  .history{margin-top:34px;}
+  .history-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+  .history-title{font-family:var(--font-mono);font-size:11px;color:var(--muted);letter-spacing:.1em;margin:0 0 0 4px;}
+  .history-refresh{background:transparent;border:1px solid var(--line);border-radius:7px;color:var(--muted);padding:6px 10px;cursor:pointer;font-family:var(--font-mono);font-size:11px;}
+  .history-refresh:hover{color:var(--accent);border-color:var(--accent);}
+  .history-list{display:grid;gap:7px;}
+  .history-row{display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--panel);border:1px solid var(--line);border-radius:10px;}
+  .history-level{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+  .history-level.safe{background:var(--safe);box-shadow:0 0 8px var(--safe);}
+  .history-level.warn{background:var(--warn);box-shadow:0 0 8px var(--warn);}
+  .history-level.danger{background:var(--danger);box-shadow:0 0 8px var(--danger);}
+  .history-url{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:var(--font-mono);font-size:12px;color:var(--text);}
+  .history-score{font-family:var(--font-display);font-weight:700;font-size:14px;}
+  .history-date{color:var(--muted);font-family:var(--font-mono);font-size:10px;white-space:nowrap;}
+  .history-empty{padding:16px;color:var(--mono-dim);border:1px dashed var(--line);border-radius:10px;font-family:var(--font-mono);font-size:12px;}
+
+  .history-score.safe{color:var(--safe);}
+  .history-score.warn{color:var(--warn);}
+  .history-score.danger{color:var(--danger);}
+
+  @media (max-width:520px){
+    .verdict-card{flex-direction:column;text-align:center;}
+    .verdict-url{word-break:break-all;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="hdr">
+    <div class="dot"></div>
+    <div class="brand">SIGNAL<span>://</span>SCAN</div>
+  </div>
+  <div class="tagline">Paste a link. Read the signals before you click.</div>
+
+  <div class="scanbar">
+    <input id="urlInput" type="text" placeholder="https://example.com/login" autocomplete="off" spellcheck="false">
+    <button id="scanBtn">Scan</button>
+  </div>
+  <div class="toggle-row">
+    <span class="toggle-link" id="toggleContent">+ also paste page content</span>
+    <span class="hint">runs locally · saved to SQLite</span>
+  </div>
+
+  <div class="content-area" id="contentArea">
+    <label>PAGE TEXT (optional — paste what the site says)</label>
+    <textarea id="pageText" placeholder="e.g. Your account has been suspended. Verify your identity immediately to avoid permanent closure..."></textarea>
+  </div>
+
+  <div id="result">
+    <div class="verdict-card" id="verdictCard">
+      <div class="gauge">
+        <svg width="132" height="132" viewBox="0 0 132 132">
+          <circle cx="66" cy="66" r="56" fill="none" stroke="var(--line)" stroke-width="10"/>
+          <circle id="gaugeArc" cx="66" cy="66" r="56" fill="none" stroke="var(--safe)" stroke-width="10"
+                  stroke-linecap="round" stroke-dasharray="352" stroke-dashoffset="352"
+                  style="transition:stroke-dashoffset 1s cubic-bezier(.4,0,.2,1), stroke 1s ease"/>
+        </svg>
+        <div class="gauge-num">
+          <div class="score" id="scoreNum">0</div>
+          <div class="of100">RISK / 100</div>
+        </div>
+      </div>
+      <div class="verdict-text">
+        <span class="verdict-label" id="verdictLabel">SAFE</span>
+        <h2 class="verdict-title" id="verdictTitle">Looks fine</h2>
+        <p class="verdict-sub" id="verdictSub">No notable risk signals detected.</p>
+        <div class="verdict-url" id="verdictUrl"></div>
+      </div>
+    </div>
+
+    <div class="signals">
+      <p class="signals-hdr">SIGNALS CHECKED</p>
+      <div id="signalList"></div>
+    </div>
+
+    <div class="disclaimer">
+      Heuristic scan only — checks structural URL patterns and language cues, not a live threat-intel or malware lookup.
+      A low score doesn't guarantee safety, and a high score doesn't guarantee harm. Use judgment, especially before entering credentials or payment info.
+    </div>
+  </div>
+
+  <section class="history" aria-label="Saved scan history">
+    <div class="history-header">
+      <p class="history-title">SAVED SCANS</p>
+      <button class="history-refresh" id="historyRefresh" type="button">↻ Refresh</button>
+    </div>
+    <div class="history-list" id="historyList">
+      <div class="history-empty">Loading saved scans...</div>
+    </div>
+  </section>
+
+</div>
+
+<script>
+const scanBtn = document.getElementById('scanBtn');
+const urlInput = document.getElementById('urlInput');
+const toggleContent = document.getElementById('toggleContent');
+const contentArea = document.getElementById('contentArea');
+const pageText = document.getElementById('pageText');
+const result = document.getElementById('result');
+const historyList = document.getElementById('historyList');
+const historyRefresh = document.getElementById('historyRefresh');
+const API_BASE = window.location.port === '8000' ? '' : 'http://127.0.0.1:8000';
+
+toggleContent.addEventListener('click', () => {
+  const showing = contentArea.classList.toggle('show');
+  toggleContent.textContent = showing ? '– hide page content field' : '+ also paste page content';
+});
+
+urlInput.addEventListener('keydown', e => { if(e.key === 'Enter') runScan(); });
+scanBtn.addEventListener('click', runScan);
+historyRefresh.addEventListener('click', loadHistory);
+
+loadHistory();
+
+const SUSPICIOUS_TLDS = ['tk','ml','ga','cf','gq','xyz','top','work','click','link','support','gq','buzz'];
+const SHORTENERS = ['bit.ly','tinyurl.com','t.co','goo.gl','ow.ly','is.gd','buff.ly','rebrand.ly','cutt.ly'];
+const BRANDS = ['paypal','apple','microsoft','google','amazon','netflix','bank','chase','wellsfargo','facebook','instagram','irs','usps','fedex','dhl'];
+const URGENCY_PHRASES = ['act now','verify immediately','account suspended','confirm your identity','click here immediately',
+  'unusual activity','limited time','your account will be','failure to','payment failed','update your billing',
+  'won a prize','claim your','urgent action required','locked out','security alert','password expired'];
+const CRED_PHRASES = ['enter your password','ssn','social security number','credit card number','cvv','one-time password','otp code','login credentials','wire transfer','gift card'];
+
+function runScan(){
+  let raw = urlInput.value.trim();
+  if(!raw){ urlInput.focus(); return; }
+  if(!/^https?:\/\//i.test(raw)) raw = 'http://' + raw;
+
+  let u;
+  try{ u = new URL(raw); }
+  catch(e){
+    showParseError();
+    return;
+  }
+
+  const signals = [];
+  let score = 0;
+
+  const host = u.hostname;
+  const isIP = /^(\d{1,3}\.){3}\d{1,3}$/.test(host) || /^[0-9a-f:]+$/i.test(host) && host.includes(':');
+  if(isIP){
+    signals.push({level:'fail', name:'Raw IP address as host', desc:`"${host}" is a numeric address, not a domain name — a classic redirect/obfuscation trick.`});
+    score += 30;
+  } else {
+    signals.push({level:'pass', name:'Uses a domain name', desc:'No raw IP address in place of a hostname.'});
+  }
+
+  if(raw.includes('@')){
+    signals.push({level:'fail', name:'"@" symbol in URL', desc:'Everything before an "@" is ignored by browsers — often used to disguise the real destination.'});
+    score += 25;
+  } else {
+    signals.push({level:'pass', name:'No "@" obfuscation', desc:'URL does not hide the real host behind an "@" symbol.'});
+  }
+
+  if(host.startsWith('xn--') || host.includes('.xn--')){
+    signals.push({level:'fail', name:'Punycode / lookalike characters', desc:'Encoded international characters can visually impersonate a trusted domain.'});
+    score += 25;
+  }
+
+  const isHttps = u.protocol === 'https:';
+  if(!isHttps){
+    signals.push({level:'warn', name:'Not using HTTPS', desc:'The connection is unencrypted — avoid entering any sensitive information.'});
+    score += 12;
+  } else {
+    signals.push({level:'pass', name:'HTTPS encryption present', desc:'Traffic to this host would be encrypted in transit.'});
+  }
+
+  if(raw.length > 90){
+    signals.push({level:'warn', name:'Unusually long URL', desc:`${raw.length} characters — long, cluttered URLs are often used to bury a suspicious payload.`});
+    score += 10;
+  } else {
+    signals.push({level:'pass', name:'Reasonable URL length', desc:`${raw.length} characters — nothing excessive.`});
+  }
+
+  const hyphenCount = (host.match(/-/g) || []).length;
+  if(hyphenCount >= 3){
+    signals.push({level:'warn', name:'Multiple hyphens in domain', desc:`"${host}" has ${hyphenCount} hyphens — a common pattern in typosquatted domains (e.g. secure-login-account-verify.com).`});
+    score += 10;
+  }
+
+  const subdomainCount = host.split('.').length - 2;
+  if(subdomainCount >= 3){
+    signals.push({level:'warn', name:'Deep subdomain nesting', desc:`"${host}" has ${subdomainCount} subdomain levels — sometimes used to make a fake domain look legitimate at a glance.`});
+    score += 10;
+  }
+
+  const tld = host.split('.').pop().toLowerCase();
+  if(SUSPICIOUS_TLDS.includes(tld)){
+    signals.push({level:'warn', name:`Free / high-abuse TLD (.${tld})`, desc:'This top-level domain is inexpensive and disproportionately used in phishing campaigns — not proof of harm on its own.'});
+    score += 12;
+  }
+
+  const isShortener = SHORTENERS.some(s => host.includes(s));
+  if(isShortener){
+    signals.push({level:'warn', name:'URL shortening service', desc:'Shorteners hide the true destination until you click — legitimate, but worth expanding before trusting.'});
+    score += 8;
+  }
+
+  const brandInPath = BRANDS.find(b => (host.replace(/\./g,'') ).includes(b) === false && (raw.toLowerCase().includes(b)) && !host.toLowerCase().includes(b + '.com') && !host.toLowerCase().endsWith('.'+b+'.com'));
+  const brandInSubdomainNotRoot = BRANDS.find(b => {
+    const parts = host.toLowerCase().split('.');
+    const root = parts.slice(-2).join('.');
+    return host.toLowerCase().includes(b) && !root.startsWith(b + '.');
+  });
+  if(brandInSubdomainNotRoot){
+    signals.push({level:'fail', name:'Brand name outside the root domain', desc:`"${brandInSubdomainNotRoot}" appears in the address but isn't part of the actual root domain "${host.split('.').slice(-2).join('.')}" — a common impersonation pattern.`});
+    score += 22;
+  }
+
+  const suspiciousKeywords = ['login','verify','secure','account','update','confirm','signin','billing','password','reset'];
+  const kwHits = suspiciousKeywords.filter(k => host.toLowerCase().includes(k));
+  if(kwHits.length >= 2){
+    signals.push({level:'warn', name:'Multiple credential-themed words in domain', desc:`Contains: ${kwHits.join(', ')} — legitimate sites rarely stack this many of these in the hostname itself.`});
+    score += 12;
+  }
+
+  if(u.port && !['80','443',''].includes(u.port)){
+    signals.push({level:'warn', name:'Non-standard port specified', desc:`Connecting on port ${u.port} instead of the default — unusual for a normal consumer-facing page.`});
+    score += 8;
+  }
+
+  // page content analysis
+  const text = pageText.value.trim().toLowerCase();
+  if(text){
+    const urgencyHits = URGENCY_PHRASES.filter(p => text.includes(p));
+    const credHits = CRED_PHRASES.filter(p => text.includes(p));
+    if(urgencyHits.length){
+      signals.push({level:'warn', name:'Urgency / pressure language in page text', desc:`Phrases like "${urgencyHits[0]}" are common social-engineering pressure tactics.`});
+      score += Math.min(18, urgencyHits.length * 7);
+    }
+    if(credHits.length){
+      signals.push({level:'fail', name:'Requests sensitive information', desc:`Page text asks for things like "${credHits[0]}" — be very cautious about entering this anywhere unverified.`});
+      score += Math.min(22, credHits.length * 9);
+    }
+    if(!urgencyHits.length && !credHits.length){
+      signals.push({level:'pass', name:'No obvious social-engineering language', desc:'Pasted text doesn\'t match common pressure or credential-harvesting phrasing.'});
+    }
+  }
+
+  score = Math.max(0, Math.min(100, score));
+  renderResult(score, signals, raw, host);
+}
+
+function showParseError(){
+  result.classList.add('show');
+  document.getElementById('signalList').innerHTML = '';
+  document.getElementById('verdictUrl').textContent = '';
+  document.getElementById('verdictTitle').textContent = "Couldn't parse that as a URL";
+  document.getElementById('verdictSub').textContent = 'Double check the link and try again.';
+  document.getElementById('verdictLabel').textContent = 'N/A';
+  document.getElementById('verdictLabel').style.background = 'var(--panel-2)';
+  document.getElementById('verdictLabel').style.color = 'var(--muted)';
+  document.getElementById('scoreNum').textContent = '—';
+  document.getElementById('gaugeArc').style.strokeDashoffset = 352;
+}
+
+function renderResult(score, signals, raw, host){
+  result.classList.add('show');
+
+  let level, label, title, sub, color, glow;
+  if(score < 25){
+    level='safe'; label='LOW RISK'; color='var(--safe)'; glow='rgba(53,212,138,0.10)';
+    title='No major red flags'; sub='Structural signals look normal. Still verify the sender or link source if this arrived unexpectedly.';
+  } else if(score < 55){
+    level='warn'; label='USE CAUTION'; color='var(--warn)'; glow='rgba(240,176,61,0.10)';
+    title='A few things worth a second look'; sub='Some patterns here are common in both legitimate and deceptive sites. Verify independently before entering any information.';
+  } else {
+    level='danger'; label='HIGH RISK'; color='var(--danger)'; glow='rgba(240,71,92,0.12)';
+    title='Multiple deception patterns found'; sub='This link shows several patterns commonly seen in phishing or spoofed pages. Avoid entering credentials or personal info.';
+  }
+
+  document.getElementById('verdictCard').style.setProperty('--verdict-glow', glow);
+  document.getElementById('verdictLabel').textContent = label;
+  document.getElementById('verdictLabel').style.background = level==='safe'?'var(--safe-dim)':level==='warn'?'var(--warn-dim)':'var(--danger-dim)';
+  document.getElementById('verdictLabel').style.color = color;
+  document.getElementById('verdictTitle').textContent = title;
+  document.getElementById('verdictSub').textContent = sub;
+  document.getElementById('verdictUrl').textContent = raw;
+
+  document.getElementById('scoreNum').style.color = color;
+  const arc = document.getElementById('gaugeArc');
+  arc.style.stroke = color;
+  const circumference = 352;
+  const offset = circumference - (score/100)*circumference;
+
+  let current = 0;
+  const numEl = document.getElementById('scoreNum');
+  const step = () => {
+    current += Math.max(1, Math.round((score-current)/6));
+    if(current >= score){ current = score; numEl.textContent = current; return; }
+    numEl.textContent = current;
+    requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+  setTimeout(()=>{ arc.style.strokeDashoffset = offset; }, 50);
+
+  const listEl = document.getElementById('signalList');
+  listEl.innerHTML = '';
+  const order = {fail:0, warn:1, pass:2};
+  signals.sort((a,b)=>order[a.level]-order[b.level]).forEach(s=>{
+    const icon = s.level==='pass' ? '✓' : s.level==='warn' ? '!' : '✕';
+    const row = document.createElement('div');
+    row.className = 'signal-row';
+    row.innerHTML = `<div class="signal-icon ${s.level}">${icon}</div>
+      <div class="signal-body">
+        <div class="signal-name">${s.name}</div>
+        <div class="signal-desc">${s.desc}</div>
+      </div>`;
+    listEl.appendChild(row);
+  });
+  
+
+  result.scrollIntoView({behavior:'smooth', block:'nearest'});
+
+  saveScan({
+    url: raw,
+    host,
+    score,
+    level,
+    label,
+    signals,
+    used_page_text: Boolean(pageText.value.trim())
+  });
+}
+
+async function saveScan(scan){
+  try{
+    const response = await fetch(`${API_BASE}/api/scans`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(scan)
+    });
+    if(!response.ok) throw new Error(`HTTP ${response.status}`);
+    loadHistory();
+  } catch(error){
+    const message = error && error.message ? error.message : 'Unknown error';
+    historyList.innerHTML = `
+      <div class="history-empty" style="color: var(--warn); border-color: var(--warn); background: var(--warn-dim);">
+        Save failed: ${escapeHtml(message)}. Start the Python server and refresh the page.
+      </div>
+    `;
+    console.warn('Scan could not be saved to SQLite:', error);
+  }
+}
+
+async function loadHistory(){
+  historyList.innerHTML = '<div class="history-empty">Loading saved scans...</div>';
+  try{
+    const response = await fetch(`${API_BASE}/api/history`);
+    if(!response.ok) throw new Error(`HTTP ${response.status}`);
+    const data = await response.json();
+    renderHistory(data.scans || []);
+  } catch(error){
+    historyList.innerHTML = '<div class="history-empty">Start the Python server to view saved scans.</div>';
+    console.warn('Could not load scan history:', error);
+  }
+}
+
+function renderHistory(scans){
+  if(!scans.length){
+    historyList.innerHTML = '<div class="history-empty">No scans saved yet.</div>';
+    return;
+  }
+
+  historyList.innerHTML = scans.map(scan => {
+    const date = new Date(scan.scanned_at).toLocaleString();
+    const score = Math.round(scan.score);
+    return `<div class="history-row">
+      <span class="history-level ${scan.level}" aria-hidden="true"></span>
+      <span class="history-url" title="${escapeHtml(scan.url)}">${escapeHtml(scan.url)}</span>
+      <span class="history-score ${scan.level}">${score}/100</span>
+      <span class="history-date">${escapeHtml(date)}</span>
+    </div>`;
+  }).join('');
+}
+
+function escapeHtml(value){
+  return String(value).replace(/[&<>'"]/g, character => ({
+    '&':'&amp;', '<':'&lt;', '>':'&gt;', "'":'&#39;', '"':'&quot;'
+  }[character]));
+}
+</script>
+</body>
+</html>
+
